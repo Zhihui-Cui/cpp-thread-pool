@@ -1,0 +1,12 @@
+# Build output
+/build/
+/out/
+/cmake-build-*/
+
+# IDE settings
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
