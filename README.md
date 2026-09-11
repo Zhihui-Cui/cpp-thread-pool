@@ -26,9 +26,13 @@ docs/        设计与学习记录
 ## 构建（目标）
 
 ```bash
-cmake -S . -B build
-cmake --build build
-ctest --test-dir build --output-on-failure
+cmake -S . -B build-ninja -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_COMPILER=C:/msys64/ucrt64/bin/g++.exe -DCMAKE_MAKE_PROGRAM=C:/msys64/ucrt64/bin/ninja.exe
+
+# 修改代码后，重新编译
+cmake --build build-ninja
+
+# 编译成功后，运行测试
+ctest --test-dir build-ninja --output-on-failure
 ```
 
 > 代码将在每个功能完成时逐步加入；不要跳到后续功能，先完成当前 Issue 的验收。

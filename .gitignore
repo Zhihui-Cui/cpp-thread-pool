@@ -2,6 +2,8 @@
 /build/
 /out/
 /cmake-build-*/
+/build-ninja/
+/task_queue_test.exe
 
 # IDE settings
 .vscode/
