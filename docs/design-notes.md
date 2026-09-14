@@ -31,24 +31,41 @@
 
 ### 我的理解与设计选择
 
-思考提示：为什么判空和出队必须放在同一次持锁操作中？为什么模板实现放在头文件中？为什么 0 和空结果不同？
-
-> 待填写：用自己的话解释本阶段的执行流程、关键知识和设计理由。
+- 判空和出队必须在同一次持锁操作中完成。如果中间释放锁，其他线程可能取走最后一个元素，之前的“非空”判断就失效了。这里讨论的是同一进程内的多个线程。
+- 模板实现放在头文件中，不只是为了复用：编译器根据 `ThreadSafeQueue<int>`、`ThreadSafeQueue<std::string>` 等具体类型生成代码时，通常需要看到模板定义。本项目没有采用显式实例化，因此将声明和实现一起放在头文件中。
+- `0` 是一个有效的元素值，不能用它代表“没取到任务”。`std::optional<T>` 分别表达“有一个值”和“没有值”，空队列返回 `std::nullopt`。
+- `auto` 在声明时推导类型，之后类型不再变化。整数队列的取出结果是 `std::optional<int>`，即使结果为空也仍是这个类型；字符串结果使用单独的变量。
+- `push(T task)` 按值接收参数。传入普通字符串变量时，先复制出参数 `task`，再通过 `std::move(task)` 允许队列移走参数的资源，避免再复制一次。`std::move` 本身不搬运数据，实际是否移动以及如何移动取决于类型；对于整数，移动通常没有额外收益。
+- `empty()` 只描述检查那一刻的状态，因此调用方应直接根据 `try_pop()` 的结果决定是否使用元素，而不是先调用 `empty()` 来保证随后一定能取到。
 
 ### 遇到的问题与解决过程
 
-> 待填写：现象或错误信息 → 原因 → 修改方法 → 如何确认已解决。没有遇到问题时可写“无”。
+以下为 Issue #1 学习过程中实际遇到的问题。
+
+- **`std` 中找不到 `mutex`**：补上 `<mutex>` 后仍报错，修改编辑器的 C++17 设置也未解决。直接用编译器检查发现，旧工具链是 GCC 7.3.0 的 `win32` 线程模型，该安装无法编译 `std::mutex`。改用 MSYS2 UCRT64 GCC，并更新编辑器的编译器路径；新版 GCC 的语法检查和后续构建通过。
+- **PowerShell 找不到 `g++`**：编辑器的 `compilerPath` 和终端的 `Path` 是不同配置。先用完整路径执行编译器，再将 `C:\msys64\ucrt64\bin` 加入用户 `Path`，重启 VS Code 后验证。最终能直接运行 `g++` 命令。
+- **直接编译头文件时出现 `#pragma once` 警告**：头文件被当成主编译文件，导致用途提醒。保留 `#pragma once`，改由测试 `.cpp` 包含头文件并编译；该警告不需要通过删除头文件保护来解决。
+- **不会创建 `lock_guard` 对象**：最初只写了类型 `std::lock_guard<std::mutex>;`，没有创建对象或指定互斥量。改为 `std::lock_guard<std::mutex> lock(mutex_);`，让局部对象从构造时加锁，直到离开作用域时解锁。后续构建通过。
+- **`empty() const` 中加锁时报参数为 `const std::mutex`**：加锁会改变互斥量的内部状态，而 `const` 成员函数默认不能修改普通成员。将锁声明为 `mutable std::mutex mutex_;`，保留 `empty()` 的 `const`。锁状态可以变化，但队列的逻辑内容不变；修改后编译通过。
+- **CMake 的 Ninja 与 MinGW Makefiles 冲突**：原 `build/` 缓存了另一种生成器配置。改用独立的 `build-ninja/`，明确指定新版 GCC、Ninja 和 Debug；配置输出 `Found Threads: TRUE`、`Configuring done`、`Generating done`，随后编译和 CTest 通过。
 
 ### 验收与归档
 
-验收重点：单线程存取、至少三个边界测试，以及空结果的处理。
+验收重点：单线程存取、至少三个边界测试，以及空结果的处理。以下记录对应 Issue #1 提交时的代码和当时对话中的验证结果，不将后续阶段新增的测试计入本阶段。
 
-- 实际修改的文件：待填写。
-- 验证命令与结果：待填写。
-- 测试能证明什么、尚未验证什么：待填写。
-- 仍不确定的问题：待填写。
-- 提交编号或链接：待填写。
-- GitHub 推送与 Issue 关闭记录：待填写。
+- 实际修改的文件：新增 `include/task_queue.hpp`、`tests/task_queue_test.cpp`；修改 `CMakeLists.txt`、`README.md`、`docs/design-notes.md`、`.gitignore`，共六个文件。VS Code 配置用于本地环境设置，没有纳入该提交。
+- 验证命令与结果：使用下面的命令完成 Debug 配置、构建和测试。配置识别到 GNU 16.2.0 和线程支持；构建输出 `[4/4] Linking CXX executable task_queue_test.exe`；最后一次反馈的 CTest 结果为 `1/1 Passed`、`100% tests passed out of 1`，总耗时约 0.26 秒。这里的一项测试是一个测试程序，其中执行了多组断言。
+
+  ```powershell
+  cmake -S . -B build-ninja -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_COMPILER=C:/msys64/ucrt64/bin/g++.exe -DCMAKE_MAKE_PROGRAM=C:/msys64/ucrt64/bin/ninja.exe
+  cmake --build build-ninja
+  ctest --test-dir build-ninja --output-on-failure
+  ```
+
+- 测试能证明什么、尚未验证什么：测试验证了初始空队列、单个元素 `225` 的存取、取空后再次取出、`10/20/30` 的 FIFO 顺序、有效值 `0` 与空结果的区别，以及字符串 `hello` 的存取和取空。初始为空、取空后再取、零值三个边界均有断言。通过检查实现确认各队列操作使用同一把锁；但本阶段未运行多线程并发测试或数据竞争检测，不能用单线程测试通过来证明所有并发场景正确，也未验证异常路径或仅可移动类型。断言应在未定义 `NDEBUG` 的构建中运行，本次使用 Debug。
+- 仍不确定的问题：对话中已解决阻塞构建与测试的问题；后续仍需深入理解移动构造、模板实例化，以及用并发测试验证共享队列的方法。这些是后续学习点，不写成已验证的能力。
+- 提交编号或链接：[`eb80b1f`](https://github.com/Zhihui-Cui/cpp-thread-pool/commit/eb80b1f)，提交说明为 `feat: implement generic thread-safe queue (#1)`；该次提交包含六个文件，112 行新增、3 行删除。本次补写的总结不包含在该历史提交中。
+- GitHub 推送与 Issue 关闭记录：执行 `git push origin main` 成功，终端显示 `7b79ab3..eb80b1f main -> main`。归档核查时，GitHub Issue #1 的四项验收均已勾选，状态为 `closed`，关闭原因为 `completed`；关闭时间为北京时间 2026-09-11 11:59:35。提交信息中的 `(#1)` 只关联 Issue，本身不是自动关闭指令。
 
 ## Issue #2：单线程任务执行器
 
@@ -56,29 +73,44 @@
 
 ### 学习范围与文件
 
-- 学习范围：lambda、捕获、std::function、移动语义；提交并按顺序执行任务。
-- 文件位置：`include/single_thread_executor.hpp`、`src/single_thread_executor.cpp`、`tests/single_thread_executor_test.cpp`、`CMakeLists.txt`
+- 学习范围：lambda、捕获、`std::function`、移动语义；提交并按顺序执行任务；头文件与源文件分工、测试组织和 CMake 目标注册。
+- 文件位置：`include/single_thread_executor.hpp`、`src/single_thread_executor.cpp`、`tests/single_thread_executor_test.cpp`、`tests/task_queue_test.cpp`、`CMakeLists.txt`；说明与总结写在 `README.md`、`docs/design-notes.md`。
 
 ### 我的理解与设计选择
 
-思考提示：保存任务与执行任务有什么区别？task.value() 和 task.value()() 的区别是什么？[&order, i] 分别捕获了什么？为什么拆分头文件、源文件和测试？
-
-> 待填写：用自己的话解释本阶段的执行流程、关键知识和设计理由。
+- **保存任务与执行任务是两个动作**：lambda 可以像普通对象一样放进队列。`submit()` 只保存任务，函数体中的赋值或追加元素此时不会执行。`run()` 才负责反复取出任务并调用，直到队列为空。当前执行器不创建新线程，任务在调用 `run()` 的线程中执行。
+- **任务需要统一的存储类型**：不同 lambda 有不同类型，`std::function<void()>` 可以包装符合“无参数、无返回值”调用形式的可调用对象，让这些任务进入同一个 `ThreadSafeQueue<std::function<void()>>`。
+- **取出不等于调用**：`try_pop()` 将任务从队列移除，并返回包含任务的 `optional`。`has_value()` 检查是否取到任务，`task.value()` 取得函数对象，后面的 `()` 才调用函数。因此 `task.value()()` 才会产生任务中的效果；队列变空可能发生在任务执行之前。
+- **捕获决定任务使用哪个数据**：`[&value]` 通过引用访问外部的 `value`；`[&order, i]` 让多个任务访问同一个 `order`，同时让每个任务保存提交时的 `i` 副本。引用捕获的对象必须在任务执行时仍然存活。本阶段的测试在局部变量离开作用域前调用 `run()`。
+- **提交时移动任务对象**：`submit(std::function<void()> task)` 按值接收任务，再用 `tasks_.push(std::move(task))` 将参数交给队列。`std::move` 允许后续操作使用移动语义，它本身不会执行任务。
+- **封装的目的**：把测试中重复的“入队、循环取出、调用”收进 `SingleThreadExecutor`。调用方使用 `submit()` 和 `run()`，不必自己写取任务循环。`try_pop()` 返回时内部的锁已经释放，调用任务发生在队列锁之外。
+- **文件按组件和职责组织**：执行器是普通类，在 `.hpp` 中声明、`.cpp` 中实现。Issue #1 的队列是模板，当前组织方式要求使用它的代码能看到模板定义，因此实现留在头文件中，不需要补建 `task_queue.cpp`。
+- **测试按行为拆分**：队列测试验证存取和可调用对象的保存；执行器测试验证延迟执行、顺序执行和不重复执行。每个测试函数创建自己的对象，`main()` 只组织调用，避免测试之间依赖同一个队列的残留状态。
+- **CMake 描述构建关系**：将执行器源文件加入 `thread_pool` 库；用 `add_executable` 创建测试程序、`target_link_libraries` 链接库、`add_test` 注册测试。终端中的配置、构建和测试是不同步骤，`ctest` 不会重新编译修改后的代码。
 
 ### 遇到的问题与解决过程
 
-> 待填写：现象或错误信息 → 原因 → 修改方法 → 如何确认已解决。没有遇到问题时可写“无”。
+- **`value == 42` 断言失败**：最初只写了 `task.value();`，取到函数对象却没有调用它，所以 `value` 仍为初始化的 `0`。改成 `task.value()();`，重新编译和测试后通过。由此理解“保存、取出、执行”是三个不同操作。
+- **测试不断堆进一个 main**：最初整数、字符串、lambda 和顺序执行练习都写在队列测试中。整理时把队列测试拆成六个独立函数，执行器测试拆成两个独立函数，并去掉队列测试中重复的三个 lambda 顺序执行练习。整理后两个测试程序均通过。
+- **不清楚新组件如何加入工程**：起初只理解了任务调用，没有把文件结构和构建步骤联系起来。随后创建执行器头文件、源文件与独立测试，将源文件加入库并注册测试目标。CMake 按“项目配置、库、测试”整理；VS Code 的 C++ 标准也从 C++20 对齐为实际构建使用的 C++17。
 
 ### 验收与归档
 
 验收重点：能提交 lambda、按提交顺序执行，以及最小示例可运行。
 
-- 实际修改的文件：待填写。
-- 验证命令与结果：待填写。
-- 测试能证明什么、尚未验证什么：待填写。
-- 仍不确定的问题：待填写。
-- 提交编号或链接：待填写。
-- GitHub 推送与 Issue 关闭记录：待填写。
+- 实际修改的文件：提交新增执行器头文件、源文件和测试文件；修改 `CMakeLists.txt`、`tests/task_queue_test.cpp`、`README.md`、`docs/design-notes.md`，共七个文件。VS Code 配置调整属于本地环境设置，未包含在该提交中；提前创建的线程池测试和 benchmark 空文件也未纳入本阶段提交。
+- 验证命令与结果：本阶段完成配置、构建与 CTest 验证。整理代码后的测试为 `2/2 Passed`；收尾核查时再次构建并运行测试，结果为 `100% tests passed out of 2`，总耗时约 0.27 秒。以下记录来自当时实际执行结果，本次补写文档未重新运行测试。
+
+  ```powershell
+  cmake -S . -B build-ninja
+  cmake --build build-ninja
+  ctest --test-dir build-ninja --output-on-failure
+  ```
+
+- 测试能证明什么、尚未验证什么：队列测试验证函数对象可以保存、取出，并在显式调用后修改外部变量；执行器测试验证提交时结果容器仍为空，`run()` 后结果为 `{1, 2, 3}`，以及再次运行不会重复执行已完成任务。执行器测试本身是可运行的最小使用示例，README 另附打印任务的用法。CTest 的“两项”对应两个程序，内部有多个测试函数。本阶段未验证多线程执行、并发提交、任务异常、空函数对象或仅可移动任务，也没有实现 future 和关闭语义；单线程测试通过不能证明未来线程池的并发正确性。当前验证使用 Debug，保证断言有效。
+- 仍不确定的问题：后续继续深入移动语义与模板实例化，并学习 worker 生命周期、共享数据同步、future 和异常传递。本阶段出现的函数未调用问题已解决，后续主题不作为当前已掌握或已验证的能力。
+- 提交编号或链接：[`6cf0b37`](https://github.com/Zhihui-Cui/cpp-thread-pool/commit/6cf0b37d0052c8e143154568a6b65c714c75ff7f)，提交说明为 `feat: add single-thread task executor`，正文为 `Refs #2`；提交时间为北京时间 2026-09-13 22:58:57，共七个文件，567 行新增、73 行删除。本次补写的总结不包含在该历史提交中。
+- GitHub 推送与 Issue 关闭记录：2026-09-14 归档核查时，远端 `main` 与本地 `main` 均指向 `6cf0b37`，确认该提交已在 GitHub。Issue #2 的三项验收均已勾选，状态为 `closed`，关闭原因为 `completed`；关闭时间为北京时间 2026-09-13 23:00:04。`Refs #2` 用于关联 Issue，本身不是自动关闭指令。
 
 ## Issue #3：多 worker 生命周期管理
 
