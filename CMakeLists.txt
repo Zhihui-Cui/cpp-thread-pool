@@ -30,12 +30,12 @@ target_link_libraries(thread_pool PUBLIC Threads::Threads)
 # Tests: each executable has its own main().
 enable_testing()
 
-add_executable(task_queue_test 
+add_executable(task_queue_test
     tests/task_queue_test.cpp
 )
 target_link_libraries(task_queue_test PRIVATE thread_pool)
 add_test(
-    NAME task_queue_test 
+    NAME task_queue_test
     COMMAND task_queue_test
 )
 
@@ -46,4 +46,13 @@ target_link_libraries(single_thread_executor_test PRIVATE thread_pool)
 add_test(
     NAME single_thread_executor_test
     COMMAND single_thread_executor_test
+)
+
+add_executable(thread_pool_test
+    tests/thread_pool_test.cpp
+)
+target_link_libraries(thread_pool_test PRIVATE thread_pool)
+add_test(
+    NAME thread_pool_test
+    COMMAND thread_pool_test
 )

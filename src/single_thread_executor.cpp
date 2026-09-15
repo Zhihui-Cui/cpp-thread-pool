@@ -14,6 +14,7 @@ void SingleThreadExecutor::run() {
         if (!task.has_value()) {
             break;
         }
+
         task.value()();
     }
 }

@@ -2,7 +2,7 @@
 
 一个以学习为目标的 C++17 线程池项目，逐步练习任务队列、任务执行、线程同步和工程组织。
 
-当前已实现泛型线程安全队列和单线程任务执行器。多 worker、阻塞等待、future 与优雅关闭属于后续计划。
+当前已实现泛型线程安全队列、单线程任务执行器，以及支持指定 worker 数量和析构回收的线程池。空闲 worker 暂用轮询；阻塞等待、future 与完整的优雅关闭接口属于后续计划。
 
 ## 学习路线与进度
 
@@ -11,8 +11,8 @@
 | 阶段 | 学习主题 | 实现进度 |
 | --- | --- | --- |
 | [Issue #1](https://github.com/Zhihui-Cui/cpp-thread-pool/issues/1) | 泛型线程安全任务队列 | 已实现并测试 |
-| [Issue #2](https://github.com/Zhihui-Cui/cpp-thread-pool/issues/2) | 单线程任务执行器 | 已实现并测试|
-| [Issue #3](https://github.com/Zhihui-Cui/cpp-thread-pool/issues/3) | 多 worker 生命周期管理 | 待实现 |
+| [Issue #2](https://github.com/Zhihui-Cui/cpp-thread-pool/issues/2) | 单线程任务执行器 | 已实现并测试 |
+| [Issue #3](https://github.com/Zhihui-Cui/cpp-thread-pool/issues/3) | 多 worker 生命周期管理 | 已实现并测试，待提交归档 |
 | [Issue #4](https://github.com/Zhihui-Cui/cpp-thread-pool/issues/4) | 阻塞等待与唤醒 | 待实现 |
 | [Issue #5](https://github.com/Zhihui-Cui/cpp-thread-pool/issues/5) | submit 与 future | 待实现 |
 | [Issue #6](https://github.com/Zhihui-Cui/cpp-thread-pool/issues/6) | 优雅关闭 | 待实现 |
@@ -26,14 +26,14 @@
 include/
     task_queue.hpp                  模板队列的声明与实现
     single_thread_executor.hpp      单线程执行器声明
-    thread_pool.hpp                 线程池接口，当前为占位文件
+    thread_pool.hpp                 线程池构造、析构与提交接口
 src/
     single_thread_executor.cpp      单线程执行器实现
-    thread_pool.cpp                 线程池实现，当前为占位文件
+    thread_pool.cpp                 worker 创建、轮询执行与退出回收
 tests/
     task_queue_test.cpp             队列测试
     single_thread_executor_test.cpp 单线程执行器测试
-    thread_pool_test.cpp            后续线程池测试，当前为空文件
+    thread_pool_test.cpp            线程基础与线程池生命周期测试
 benchmarks/
     thread_pool_benchmark.cpp       后续性能测试，当前为空文件
 docs/
@@ -43,6 +43,8 @@ README.md                          项目概览与使用说明
 ```
 
 模板队列的实现保留在头文件中，供使用它的代码按具体类型实例化。普通执行器采用头文件声明、源文件实现的组织方式。
+
+代码排版与日常编写约定见 [代码风格](docs/coding-style.md)，自动格式化规则保存在项目根目录的 `.clang-format` 中。
 
 ## 环境与构建
 
@@ -112,14 +114,43 @@ int main() {
 
 可运行的使用与验收示例见 [执行器测试](tests/single_thread_executor_test.cpp)。
 
+### 多 worker 线程池
+
+- 构造时指定正的 worker 数量，传入 `0` 抛出 `std::invalid_argument`。
+- 构造函数启动 worker，`submit()` 将 `std::function<void()>` 任务入队；任务可能在提交返回前开始执行。
+- worker 取到任务后解锁再执行，空闲时使用 `yield()` 轮询，不保证任务的完成顺序或均匀分配。
+- 析构时设置停止标志，worker 完成剩余任务后退出，再由析构函数 join 所有 worker。
+
+```cpp
+#include "thread_pool.hpp"
+
+#include <cassert>
+
+int main() {
+    int result = 0;
+
+    {
+        learning::ThreadPool pool(2);
+        pool.submit([&result] {
+            result = 42;
+        });
+    } // 析构等待 worker 结束，result 仍然存活。
+
+    assert(result == 42);
+}
+```
+
+该例只有一个任务写 `result`，主线程在析构等待完成后读取。多个任务并发修改同一份结果时，需要额外同步。当前使用要求是：任务正常返回，提交在线程池析构开始前结束，引用捕获的数据保持存活。任务异常传回调用方的机制尚未实现。
+
 ## 测试
 
 | 测试程序 | 当前覆盖的行为 |
 | --- | --- |
 | `task_queue_test` | 空队列、单元素存取、先进先出、零值、字符串、可调用对象存取 |
 | `single_thread_executor_test` | 提交时不执行、按顺序执行、完成的任务不重复执行 |
+| `thread_pool_test` | 线程基础、共享队列消费、1/2/4 个 worker 各正确执行 1,000 个任务、拒绝零 worker、空任务析构 |
 
-目前 CTest 注册了两个测试程序。一个程序中的多个测试函数不会分别计入 CTest 的测试数量。并发访问与线程生命周期的验证将在后续阶段补充。
+目前 CTest 注册了三个测试程序。一个程序中的多个测试函数不会分别计入 CTest 的测试数量。已检查同步实现并运行上述测试；尚未使用数据竞争检测器，也未模拟构造中途创建线程失败。详细证据与限制见设计笔记。
 
 ## 线程池架构（Issue #3～#6 完成后填写）
 
@@ -131,7 +162,7 @@ int main() {
 
 ## 关闭语义（Issue #6 完成后填写）
 
-设计目标是停止接收新任务、完成已提交任务、唤醒并 join 所有 worker；当前尚未实现。
+当前已实现析构时通知停止、完成剩余任务并 join；尚无公开 `stop()`、停止后的提交拒绝协议或条件变量唤醒。完整关闭语义与边界测试将在 Issue #6 完善。
 
 > 待填写：stop 后提交任务的行为、析构行为、重复调用 stop 的行为，以及对应测试。
 

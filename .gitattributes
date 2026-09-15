@@ -1,0 +1,8 @@
+# Keep source and project configuration line endings consistent across systems.
+*.cpp text eol=lf
+*.hpp text eol=lf
+*.md text eol=lf
+CMakeLists.txt text eol=lf
+.clang-format text eol=lf
+.editorconfig text eol=lf
+.gitattributes text eol=lf
