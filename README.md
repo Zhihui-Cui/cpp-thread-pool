@@ -2,7 +2,7 @@
 
 一个以学习为目标的 C++17 线程池项目，逐步练习任务队列、任务执行、线程同步和工程组织。
 
-当前已实现泛型线程安全队列、单线程任务执行器，以及支持指定 worker 数量和析构回收的线程池。空闲 worker 暂用轮询；阻塞等待、future 与完整的优雅关闭接口属于后续计划。
+当前已实现泛型线程安全队列、单线程任务执行器，以及支持指定 worker 数量和析构回收的线程池。空闲 worker 使用条件变量阻塞等待；future 与完整的优雅关闭接口属于后续计划。
 
 ## 学习路线与进度
 
@@ -13,7 +13,7 @@
 | [Issue #1](https://github.com/Zhihui-Cui/cpp-thread-pool/issues/1) | 泛型线程安全任务队列 | 已实现并测试 |
 | [Issue #2](https://github.com/Zhihui-Cui/cpp-thread-pool/issues/2) | 单线程任务执行器 | 已实现并测试 |
 | [Issue #3](https://github.com/Zhihui-Cui/cpp-thread-pool/issues/3) | 多 worker 生命周期管理 | 已实现并测试，Issue 已关闭 |
-| [Issue #4](https://github.com/Zhihui-Cui/cpp-thread-pool/issues/4) | 阻塞等待与唤醒 | 待实现 |
+| [Issue #4](https://github.com/Zhihui-Cui/cpp-thread-pool/issues/4) | 阻塞等待与唤醒 | 已实现并测试，待提交与归档 |
 | [Issue #5](https://github.com/Zhihui-Cui/cpp-thread-pool/issues/5) | submit 与 future | 待实现 |
 | [Issue #6](https://github.com/Zhihui-Cui/cpp-thread-pool/issues/6) | 优雅关闭 | 待实现 |
 | [Issue #7](https://github.com/Zhihui-Cui/cpp-thread-pool/issues/7) | 测试、benchmark 与项目说明 | 待完成 |
@@ -29,11 +29,11 @@ include/
     thread_pool.hpp                 线程池构造、析构与提交接口
 src/
     single_thread_executor.cpp      单线程执行器实现
-    thread_pool.cpp                 worker 创建、轮询执行与退出回收
+    thread_pool.cpp                 worker 创建、阻塞等待、任务执行与退出回收
 tests/
     task_queue_test.cpp             队列测试
     single_thread_executor_test.cpp 单线程执行器测试
-    thread_pool_test.cpp            线程基础与线程池生命周期测试
+    thread_pool_test.cpp            线程基础、生命周期与析构前任务执行测试
 benchmarks/
     thread_pool_benchmark.cpp       后续性能测试，当前为空文件
 docs/
@@ -118,8 +118,9 @@ int main() {
 
 - 构造时指定正的 worker 数量，传入 `0` 抛出 `std::invalid_argument`。
 - 构造函数启动 worker，`submit()` 将 `std::function<void()>` 任务入队；任务可能在提交返回前开始执行。
-- worker 取到任务后解锁再执行，空闲时使用 `yield()` 轮询，不保证任务的完成顺序或均匀分配。
-- 析构时设置停止标志，worker 完成剩余任务后退出，再由析构函数 join 所有 worker。
+- worker 使用带谓词的 `condition_variable::wait()`，在队列为空且没有停止请求时阻塞等待；取到任务后解锁再执行，不保证任务的完成顺序或均匀分配。
+- `submit()` 在 `state_mutex_` 保护下入队，解锁后调用 `notify_one()`；等待条件检查与入队使用同一把外层锁配合，队列内部的锁继续保护队列操作。
+- 析构时设置停止标志，解锁后调用 `notify_all()`，worker 完成剩余任务后退出，再由析构函数 join 所有 worker。构造中途失败时也按这一顺序回收已创建的线程，再重新抛出异常。
 
 ```cpp
 #include "thread_pool.hpp"
@@ -148,9 +149,11 @@ int main() {
 | --- | --- |
 | `task_queue_test` | 空队列、单元素存取、先进先出、零值、字符串、可调用对象存取 |
 | `single_thread_executor_test` | 提交时不执行、按顺序执行、完成的任务不重复执行 |
-| `thread_pool_test` | 线程基础、共享队列消费、1/2/4 个 worker 各正确执行 1,000 个任务、拒绝零 worker、空任务析构 |
+| `thread_pool_test` | 线程基础、共享队列消费、1/2/4 个 worker 各正确执行 1,000 个任务、拒绝零 worker、空任务析构、同一个单 worker 池连续三轮在析构前观察到任务完成标记 |
 
 目前 CTest 注册了三个测试程序。一个程序中的多个测试函数不会分别计入 CTest 的测试数量。已检查同步实现并运行上述测试；尚未使用数据竞争检测器，也未模拟构造中途创建线程失败。详细证据与限制见设计笔记。
+
+新增测试在每轮提交后使用带谓词的 `wait_for()` 等待完成标记，并在线程池析构前断言结果；不能据此保证提交时 worker 已进入阻塞，也未测量空闲 CPU 使用率或主动制造虚假唤醒。
 
 ## 线程池架构（Issue #3～#6 完成后填写）
 
@@ -162,7 +165,7 @@ int main() {
 
 ## 关闭语义（Issue #6 完成后填写）
 
-当前已实现析构时通知停止、完成剩余任务并 join；尚无公开 `stop()`、停止后的提交拒绝协议或条件变量唤醒。完整关闭语义与边界测试将在 Issue #6 完善。
+当前已实现析构时设置停止状态、通过条件变量唤醒所有等待的 worker、完成剩余任务并 join；尚无公开 `stop()` 或停止后的提交拒绝协议。完整关闭语义与边界测试将在 Issue #6 完善。
 
 > 待填写：stop 后提交任务的行为、析构行为、重复调用 stop 的行为，以及对应测试。
 

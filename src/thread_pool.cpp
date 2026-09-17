@@ -23,6 +23,8 @@ ThreadPool::ThreadPool(std::size_t worker_count) {
             stopping_ = true;
         }
 
+        cv_.notify_all();
+
         for (auto& worker : workers_) {
             worker.join();
         }
@@ -36,7 +38,12 @@ void ThreadPool::worker_loop() {
         std::optional<std::function<void()>> task;
 
         {
-            std::lock_guard<std::mutex> lock(state_mutex_);
+            std::unique_lock<std::mutex> lock(state_mutex_);
+
+            cv_.wait(lock, [this] {
+                return stopping_ || !tasks_.empty();
+            });
+
             task = tasks_.try_pop();
 
             if (!task.has_value() && stopping_) {
@@ -46,8 +53,6 @@ void ThreadPool::worker_loop() {
 
         if (task.has_value()) {
             task.value()();
-        } else {
-            std::this_thread::yield();
         }
     }
 }
@@ -58,13 +63,20 @@ ThreadPool::~ThreadPool() {
         stopping_ = true;
     }
 
+    cv_.notify_all();
+
     for (auto& worker : workers_) {
         worker.join();
     }
 }
 
 void ThreadPool::submit(std::function<void()> task) {
-    tasks_.push(std::move(task));
+    {
+        std::lock_guard<std::mutex> lock(state_mutex_);
+        tasks_.push(std::move(task));
+    }
+
+    cv_.notify_one();
 }
 
 }  // namespace learning

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <condition_variable>
 #include <cstddef>
 #include <functional>
 #include <mutex>
@@ -24,6 +25,7 @@ private:
     std::vector<std::thread> workers_;
 
     std::mutex state_mutex_;
+    std::condition_variable cv_;
     bool stopping_ = false;
 };
 

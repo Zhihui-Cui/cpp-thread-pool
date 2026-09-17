@@ -1,6 +1,8 @@
 #include "thread_pool.hpp"
 
 #include <cassert>
+#include <chrono>
+#include <condition_variable>
 #include <functional>
 #include <mutex>
 #include <stdexcept>
@@ -112,6 +114,37 @@ void test_thread_pool_destroys_without_tasks() {
     learning::ThreadPool pool(4);
 }
 
+void test_task_completes_before_destruction() {
+    bool completed = false;
+    std::mutex result_mutex;
+    std::condition_variable result_cv;
+    learning::ThreadPool pool(1);
+
+    for (int i = 0; i < 3; ++i) {
+        {
+            std::lock_guard<std::mutex> lock(result_mutex);
+            completed = false;
+        }
+
+        pool.submit([&] {
+            {
+                std::lock_guard<std::mutex> lock(result_mutex);
+                completed = true;
+            }
+
+            result_cv.notify_one();
+        });
+
+        std::unique_lock<std::mutex> lock(result_mutex);
+
+        bool res = result_cv.wait_for(lock, std::chrono::seconds(2), [&completed] {
+            return completed;
+        });
+
+        assert(res);
+    }
+}
+
 int main() {
     test_thread_updates_value();
     test_multiple_workers_update_count();
@@ -123,5 +156,6 @@ int main() {
 
     test_thread_pool_rejects_zero_workers();
     test_thread_pool_destroys_without_tasks();
+    test_task_completes_before_destruction();
     return 0;
 }
