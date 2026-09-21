@@ -2,7 +2,7 @@
 
 一个以学习为目标的 C++17 线程池项目，逐步练习任务队列、任务执行、线程同步和工程组织。
 
-当前已实现泛型线程安全队列、单线程任务执行器，以及支持指定 worker 数量和析构回收的线程池。空闲 worker 使用条件变量阻塞等待；future 与完整的优雅关闭接口属于后续计划。
+当前已实现泛型线程安全队列、单线程任务执行器，以及支持指定 worker 数量和析构回收的线程池。空闲 worker 使用条件变量阻塞等待；模板 `submit()` 支持无参数、带捕获及带多个参数的任务，通过 future 获取返回值或任务异常。公开的优雅关闭接口留到 Issue #6。
 
 ## 学习路线与进度
 
@@ -14,7 +14,7 @@
 | [Issue #2](https://github.com/Zhihui-Cui/cpp-thread-pool/issues/2) | 单线程任务执行器 | 已实现并测试，Issue 已关闭 |
 | [Issue #3](https://github.com/Zhihui-Cui/cpp-thread-pool/issues/3) | 多 worker 生命周期管理 | 已实现并测试，Issue 已关闭 |
 | [Issue #4](https://github.com/Zhihui-Cui/cpp-thread-pool/issues/4) | 阻塞等待与唤醒 | 已实现并测试，Issue 已关闭 |
-| [Issue #5](https://github.com/Zhihui-Cui/cpp-thread-pool/issues/5) | submit 与 future | 待实现 |
+| [Issue #5](https://github.com/Zhihui-Cui/cpp-thread-pool/issues/5) | submit 与 future | 已实现并测试，本地已提交；待推送与关闭 |
 | [Issue #6](https://github.com/Zhihui-Cui/cpp-thread-pool/issues/6) | 优雅关闭 | 待实现 |
 | [Issue #7](https://github.com/Zhihui-Cui/cpp-thread-pool/issues/7) | 测试、benchmark 与项目说明 | 待完成 |
 
@@ -26,14 +26,14 @@
 include/
     task_queue.hpp                  模板队列的声明与实现
     single_thread_executor.hpp      单线程执行器声明
-    thread_pool.hpp                 线程池构造、析构与提交接口
+    thread_pool.hpp                 线程池声明、模板 submit 与 future 包装
 src/
     single_thread_executor.cpp      单线程执行器实现
     thread_pool.cpp                 worker 创建、阻塞等待、任务执行与退出回收
 tests/
     task_queue_test.cpp             队列测试
     single_thread_executor_test.cpp 单线程执行器测试
-    thread_pool_test.cpp            线程基础、生命周期与析构前任务执行测试
+    thread_pool_test.cpp            线程基础、生命周期、返回值、异常与参数传递测试
 benchmarks/
     thread_pool_benchmark.cpp       后续性能测试，当前为空文件
 docs/
@@ -42,7 +42,7 @@ CMakeLists.txt                      构建目标、依赖和测试注册
 README.md                          项目概览与使用说明
 ```
 
-模板队列的实现保留在头文件中，供使用它的代码按具体类型实例化。普通执行器采用头文件声明、源文件实现的组织方式。
+模板队列和模板 `submit()` 的实现保留在头文件中，供使用它们的代码按具体类型实例化。普通执行器以及线程池的 worker、入队、构造和析构逻辑采用头文件声明、源文件实现的组织方式。
 
 代码排版与日常编写约定见 [代码风格](docs/coding-style.md)，自动格式化规则保存在项目根目录的 `.clang-format` 中。
 
@@ -117,9 +117,9 @@ int main() {
 ### 多 worker 线程池
 
 - 构造时指定正的 worker 数量，传入 `0` 抛出 `std::invalid_argument`。
-- 构造函数启动 worker，`submit()` 将 `std::function<void()>` 任务入队；任务可能在提交返回前开始执行。
+- 构造函数启动 worker；`submit()` 包装用户任务并返回 future，交给私有 `enqueue()` 入队的外层任务仍是 `std::function<void()>`。计算可能在提交返回前开始，甚至已经完成。
 - worker 使用带谓词的 `condition_variable::wait()`，在队列为空且没有停止请求时阻塞等待；取到任务后解锁再执行，不保证任务的完成顺序或均匀分配。
-- `submit()` 在 `state_mutex_` 保护下入队，解锁后调用 `notify_one()`；等待条件检查与入队使用同一把外层锁配合，队列内部的锁继续保护队列操作。
+- `enqueue()` 在 `state_mutex_` 保护下入队，解锁后调用 `notify_one()`；等待条件检查与入队使用同一把外层锁配合，队列内部的锁继续保护队列操作。
 - 析构时设置停止标志，解锁后调用 `notify_all()`，worker 完成剩余任务后退出，再由析构函数 join 所有 worker。构造中途失败时也按这一顺序回收已创建的线程，再重新抛出异常。
 
 ```cpp
@@ -141,7 +141,7 @@ int main() {
 }
 ```
 
-该例只有一个任务写 `result`，主线程在析构等待完成后读取。多个任务并发修改同一份结果时，需要额外同步。当前使用要求是：任务正常返回，提交在线程池析构开始前结束，引用捕获的数据保持存活。任务异常传回调用方的机制尚未实现。
+该例只有一个任务写 `result`，主线程在析构等待完成后读取。多个任务并发修改同一份结果时，需要额外同步。提交应在线程池析构开始前结束，引用捕获的数据必须保持存活，不在池自身的 worker 中销毁线程池。任务抛出的 C++ 异常由包装任务保存，需要保留 future 并调用 `get()` 才能在调用方观察到；上例未保存 future，仅用于展示析构等待。
 
 ## 测试
 
@@ -149,19 +149,74 @@ int main() {
 | --- | --- |
 | `task_queue_test` | 空队列、单元素存取、先进先出、零值、字符串、可调用对象存取 |
 | `single_thread_executor_test` | 提交时不执行、按顺序执行、完成的任务不重复执行 |
-| `thread_pool_test` | 线程基础、共享队列消费、1/2/4 个 worker 各正确执行 1,000 个任务、拒绝零 worker、空任务析构、同一个单 worker 池连续三轮在析构前观察到任务完成标记 |
+| `thread_pool_test` | 线程基础、共享队列消费、1/2/4 个 worker 各正确执行 1,000 个任务、拒绝零 worker、空任务析构、三轮析构前完成标记；future 获取 int/double/void 结果、任务异常及异常后继续执行、值捕获、单个及多个参数、mutable 任务、不可复制任务；保留 packaged_task 与 tuple/apply 的基础练习 |
 
 目前 CTest 注册了三个测试程序。一个程序中的多个测试函数不会分别计入 CTest 的测试数量。已检查同步实现并运行上述测试；尚未使用数据竞争检测器，也未模拟构造中途创建线程失败。详细证据与限制见设计笔记。
 
-新增测试在每轮提交后使用带谓词的 `wait_for()` 等待完成标记，并在线程池析构前断言结果；不能据此保证提交时 worker 已进入阻塞，也未测量空闲 CPU 使用率或主动制造虚假唤醒。
+Issue #4 的完成标记测试在每轮提交后使用带谓词的 `wait_for()` 等待，并在线程池析构前断言结果；不能据此保证提交时 worker 已进入阻塞，也未测量空闲 CPU 使用率或主动制造虚假唤醒。
+
+Issue #5 的正式接口测试直接调用 `pool.submit()` 并通过 future 检查结果。测试没有固定 worker 与提交返回的先后顺序，也没有证明每次 `get()` 都实际阻塞过。具体断言、运行记录和未覆盖范围见设计笔记。
 
 ## 线程池架构（Issue #3～#6 完成后填写）
 
 > 待填写：任务从提交到完成的流程，以及队列、worker、等待状态之间的关系。
 
-## 返回值与异常（Issue #5 完成后填写）
+## 返回值与异常
 
-> 待填写：submit 的最终接口、future 的使用示例、任务异常的获取方式。
+当前接口分为无任务参数和至少一个任务参数两个重载，均返回任务结果类型对应的 future：
+
+```cpp
+template <typename F>
+auto submit(F function) -> std::future<decltype(function())>;
+
+template <typename F, typename Arg, typename... Args>
+auto submit(F function, Arg argument, Args... args)
+    -> std::future<decltype(function(argument, args...))>;
+```
+
+可运行示例：
+
+```cpp
+#include "thread_pool.hpp"
+
+#include <cassert>
+#include <stdexcept>
+
+int main() {
+    int stored = 0;
+    learning::ThreadPool pool(2);
+
+    auto answer = pool.submit([] { return 42; });
+    int value = answer.get();
+    assert(value == 42);
+
+    auto sum = pool.submit([](int a, int b) { return a + b; }, 20, 22);
+    int total = sum.get();
+    assert(total == 42);
+
+    auto completed = pool.submit([&stored] { stored = 42; });
+    completed.get(); // future<void>：等待任务完成，不返回数值。
+    assert(stored == 42);
+
+    auto failed = pool.submit([]() -> int {
+        throw std::runtime_error("task failed");
+    });
+
+    bool caught = false;
+    try {
+        failed.get();
+    } catch (const std::runtime_error&) {
+        caught = true;
+    }
+    assert(caught);
+}
+```
+
+主线程准备任务和 future；worker 执行包装任务，将返回值或异常保存到共享状态。`get()` 在状态未就绪时等待，就绪后返回值或重新抛出保存的异常。普通 future 的 `get()` 只能获取一次，包括取出异常的情况；它等待结果，不代替线程池析构中的 `join()`。
+
+`get()` 正常返回后，可读取该任务在完成前写入的数据。它不保护多个任务同时修改同一变量。忽略 future 不会取消任务，也不会让任务异常自动在主线程抛出；需要观察失败时，应保存 future 并处理 `get()`。
+
+带参数重载按值接收任务和参数，将它们移动保存到 lambda 与 tuple 中，再由 worker 使用 `std::apply` 调用。普通变量传给按值参数时先复制，因此后续修改原变量不改变保存的整数参数。需要共享外部数据时，可使用引用捕获，并自行保证生命周期与同步。
 
 ## 关闭语义（Issue #6 完成后填写）
 
@@ -175,7 +230,10 @@ int main() {
 
 ## 设计权衡与限制（逐阶段填写）
 
-> 待填写：每项设计选择解决了什么问题、带来什么代价，以及当前实现适用的范围。详细推理放入设计笔记，这里保留简要结论。
+- 队列继续保存 `std::function<void()>`。外层 lambda 按值捕获管理包装任务的 `shared_ptr`，可被复制，且能延长包装任务的寿命；内部用户任务可以是不可复制、可移动的对象。代价包括共享所有权管理和包装对象的存储开销，尚未测量性能。
+- 当前参数传递是按值保存，再从保存的 tuple 中调用，不是完整的通用调用接口。已测试捕获 `unique_ptr` 的不可复制任务；这不等于支持将 `unique_ptr` 作为任务参数按值转交给计算函数，因为当前调用不会从 tuple 元素再次移动所有权。
+- 尚未覆盖引用返回值、成员指针调用或所有引用包装与参数类型组合，不应据现有测试推断全面支持。当前已验证用法见上方示例和测试文件。
+- 没有公开 `stop()`，停止后的提交处理及提交与关闭的边界留到 Issue #6。更多线程同步与测试限制见 [设计笔记](docs/design-notes.md)。
 
 ## 每个 Issue 的收尾流程
 

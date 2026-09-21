@@ -70,7 +70,7 @@ ThreadPool::~ThreadPool() {
     }
 }
 
-void ThreadPool::submit(std::function<void()> task) {
+void ThreadPool::enqueue(std::function<void()> task) {
     {
         std::lock_guard<std::mutex> lock(state_mutex_);
         tasks_.push(std::move(task));
@@ -78,5 +78,4 @@ void ThreadPool::submit(std::function<void()> task) {
 
     cv_.notify_one();
 }
-
 }  // namespace learning
