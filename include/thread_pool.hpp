@@ -19,6 +19,7 @@ class ThreadPool {
 public:
     explicit ThreadPool(std::size_t worker_count);
     ~ThreadPool();
+    void stop();
 
     template <typename F>
     auto submit(F function) -> std::future<decltype(function())> {

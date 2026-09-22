@@ -423,6 +423,144 @@ void test_submit_propagates_exception_with_arguments() {
     assert(caught);
 }
 
+void test_submit_rejected_after_stop() {
+    bool caught = false;
+    learning::ThreadPool pool(1);
+
+    pool.stop();
+
+    try {
+        pool.submit([] {
+            return 1;
+        });
+    } catch (const std::runtime_error&) {
+        caught = true;
+    }
+
+    assert(caught);
+}
+
+void test_stop_completes_submitted_tasks() {
+    std::vector<int> hits(1000, 0);
+    std::mutex result_mutex;
+
+    learning::ThreadPool pool(4);
+
+    for (int i = 0; i < 1000; ++i) {
+        pool.submit([&hits, &result_mutex, i] {
+            std::lock_guard<std::mutex> lock(result_mutex);
+            ++hits[i];
+        });
+    }
+
+    pool.stop();
+
+    for (int i = 0; i < 1000; ++i) {
+        assert(hits[i] == 1);
+    }
+}
+
+void test_repeated_pool_shutdown() {
+    for (int i = 0; i < 20; ++i) {
+        learning::ThreadPool pool(2);
+
+        if (i % 2) {
+            pool.stop();
+            pool.stop();
+            continue;
+        }
+
+        auto task = [i] {
+            return i;
+        };
+
+        auto result = pool.submit(task);
+
+        pool.stop();
+        pool.stop();
+
+        int value = result.get();
+
+        assert(value == i);
+    }
+}
+
+void test_stop_drains_pending_tasks() {
+    std::mutex gate_mutex;
+    std::condition_variable gate_cv;
+    bool started = false;
+    bool release = false;
+    learning::ThreadPool pool(1);
+
+    auto A = [&] {
+        std::unique_lock<std::mutex> lock(gate_mutex);
+
+        started = true;
+
+        gate_cv.notify_all();
+
+        gate_cv.wait(lock, [&release] {
+            return release;
+        });
+    };
+
+    auto result = pool.submit(A);
+
+    {
+        std::unique_lock<std::mutex> lock(gate_mutex);
+
+        gate_cv.wait(lock, [&started] {
+            return started;
+        });
+    }
+
+    auto resultB = pool.submit([] {
+        return 2;
+    });
+
+    auto resultC = pool.submit([] {
+        return 3;
+    });
+
+    std::thread closer([&pool] {
+        pool.stop();
+    });
+
+    bool rejected = false;
+    auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+
+    while (!rejected && std::chrono::steady_clock::now() < deadline) {
+        try {
+            pool.submit([] {
+            });
+        } catch (const std::runtime_error&) {
+            rejected = true;
+        }
+
+        if (!rejected) {
+            std::this_thread::yield();
+        }
+    }
+
+    {
+        std::lock_guard<std::mutex> lock(gate_mutex);
+        release = true;
+    }
+
+    gate_cv.notify_all();
+
+    closer.join();
+    assert(rejected);
+
+    result.get();
+
+    int valueB = resultB.get();
+    int valueC = resultC.get();
+
+    assert(valueB == 2);
+    assert(valueC == 3);
+}
+
 int main() {
     test_thread_updates_value();
     test_multiple_workers_update_count();
@@ -452,5 +590,9 @@ int main() {
     test_submit_accepts_multiple_arguments();
     test_submit_handles_void_task_with_arguments();
     test_submit_propagates_exception_with_arguments();
+    test_submit_rejected_after_stop();
+    test_stop_completes_submitted_tasks();
+    test_repeated_pool_shutdown();
+    test_stop_drains_pending_tasks();
     return 0;
 }

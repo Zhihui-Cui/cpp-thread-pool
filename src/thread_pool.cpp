@@ -58,6 +58,22 @@ void ThreadPool::worker_loop() {
 }
 
 ThreadPool::~ThreadPool() {
+    this->stop();
+}
+
+void ThreadPool::enqueue(std::function<void()> task) {
+    {
+        std::lock_guard<std::mutex> lock(state_mutex_);
+        if (stopping_) {
+            throw std::runtime_error("thread pool is stopped");
+        }
+        tasks_.push(std::move(task));
+    }
+
+    cv_.notify_one();
+}
+
+void ThreadPool::stop() {
     {
         std::lock_guard<std::mutex> lock(state_mutex_);
         stopping_ = true;
@@ -66,16 +82,9 @@ ThreadPool::~ThreadPool() {
     cv_.notify_all();
 
     for (auto& worker : workers_) {
-        worker.join();
+        if (worker.joinable()) {
+            worker.join();
+        }
     }
-}
-
-void ThreadPool::enqueue(std::function<void()> task) {
-    {
-        std::lock_guard<std::mutex> lock(state_mutex_);
-        tasks_.push(std::move(task));
-    }
-
-    cv_.notify_one();
 }
 }  // namespace learning
