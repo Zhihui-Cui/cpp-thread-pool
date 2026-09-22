@@ -299,7 +299,7 @@
 
 ### 验收与归档
 
-验收重点：停止后不接收新任务、已提交任务按约定完成、所有 worker 被唤醒并 join、反复启动关闭不崩溃或死锁，以及文档说明。2026-09-22 对照下表完成本地验收；实现、测试与文档在当前声明的使用范围内一致，待提交、推送和 GitHub 归档。
+验收重点：停止后不接收新任务、已提交任务按约定完成、所有 worker 被唤醒并 join、反复启动关闭不崩溃或死锁，以及文档说明。2026-09-22 对照下表完成本地验收；实现、测试与文档在当前声明的使用范围内一致，随后完成提交、推送和 GitHub 归档。
 
 - 本阶段文件：`include/thread_pool.hpp`、`src/thread_pool.cpp`、`tests/thread_pool_test.cpp`、`README.md`、本文件。工作区原有的 `include/single_thread_executor.hpp` 改动及未跟踪 benchmark 不纳入本阶段范围。
 - 最近实际验证：2026-09-22 执行 `cmake --build build-ninja`，输出 `ninja: no work to do.`；执行 `ctest --test-dir build-ninja --output-on-failure --timeout 30`，三个测试程序全部通过，总耗时约 0.26 秒。本次整理笔记只修改文档，沿用该次运行证据。
@@ -314,8 +314,8 @@
 
 - 验证限制：未运行数据竞争检测器、构造失败注入或全面并发压力测试；没有保证空池测试中每个 worker 在通知前都已阻塞。不支持多个并发 stop、worker 内部 stop 或并发访问正在析构的对象。测试通过不证明所有调度均正确。
 - 仍需巩固：独立编写 unique_lock 与条件变量的等待流程、设计可控时序测试、编写带截止时间的探测与失败清理；当前复杂测试由分步教学完成。
-- 提交编号或链接：待提交后填写。
-- GitHub 推送与 Issue 关闭记录：待最终验收、推送与关闭后填写。
+- 提交编号或链接：[`3faadee`](https://github.com/Zhihui-Cui/cpp-thread-pool/commit/3faadee19a814433c2f43d662d3a506cb36252e6)，标题为 `feat: add graceful thread pool shutdown`，正文使用 `Refs #6` 关联 Issue；包含上述五个阶段文件，229 行新增、29 行删除。提交时间为北京时间 2026-09-22 10:26:44。本条归档记录由后续文档提交补记。
+- GitHub 推送与 Issue 关闭记录：2026-09-22 本人完成推送并反馈成功；本地 `origin/main` 与功能提交编号一致。通过 GitHub 接口核对 Issue #6 的五项验收均已勾选，状态为 `closed`，关闭原因为 `completed`；关闭时间为北京时间 2026-09-22 10:45:12。`Refs #6` 本身不自动关闭 Issue，本次由本人填写验收记录并关闭。归档仅更新文档，沿用上述测试证据，未重复运行测试。
 
 ## Issue #7：测试、benchmark 与项目说明
 

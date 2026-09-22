@@ -2,7 +2,7 @@
 
 一个以学习为目标的 C++17 线程池项目，逐步练习任务队列、任务执行、线程同步和工程组织。
 
-当前已实现泛型线程安全队列、单线程任务执行器，以及支持指定 worker 数量和析构回收的线程池。空闲 worker 使用条件变量阻塞等待；模板 `submit()` 支持无参数、带捕获及带多个参数的任务，通过 future 获取返回值或任务异常。公开 `stop()` 支持拒绝新任务、完成已接受任务并等待 worker 退出；Issue #6 已完成本地验收，待提交与归档。
+当前已实现泛型线程安全队列、单线程任务执行器，以及支持指定 worker 数量和析构回收的线程池。空闲 worker 使用条件变量阻塞等待；模板 `submit()` 支持无参数、带捕获及带多个参数的任务，通过 future 获取返回值或任务异常。公开 `stop()` 支持拒绝新任务、完成已接受任务并等待 worker 退出；Issue #6 已完成验收并关闭。
 
 ## 学习路线与进度
 
@@ -15,7 +15,7 @@
 | [Issue #3](https://github.com/Zhihui-Cui/cpp-thread-pool/issues/3) | 多 worker 生命周期管理 | 已实现并测试，Issue 已关闭 |
 | [Issue #4](https://github.com/Zhihui-Cui/cpp-thread-pool/issues/4) | 阻塞等待与唤醒 | 已实现并测试，Issue 已关闭 |
 | [Issue #5](https://github.com/Zhihui-Cui/cpp-thread-pool/issues/5) | submit 与 future | 已实现并测试，Issue 已关闭 |
-| [Issue #6](https://github.com/Zhihui-Cui/cpp-thread-pool/issues/6) | 优雅关闭 | 已完成本地验收，待提交与归档 |
+| [Issue #6](https://github.com/Zhihui-Cui/cpp-thread-pool/issues/6) | 优雅关闭 | 已实现并测试，Issue 已关闭 |
 | [Issue #7](https://github.com/Zhihui-Cui/cpp-thread-pool/issues/7) | 测试、benchmark 与项目说明 | 待完成 |
 
 每个阶段完成验收和收尾后，再推进下一阶段。个人理解与踩坑记录写在 [设计与学习记录](docs/design-notes.md)。
@@ -251,7 +251,7 @@ cmake --build build-ninja
 ctest --test-dir build-ninja --output-on-failure --timeout 30
 ```
 
-本阶段最近一次核验为 2026-09-22：构建输出 `ninja: no work to do.`，CTest 为 `3/3 Passed`。三个测试程序包含上述多个测试函数。测试通过不代表覆盖所有并发调度；尚未运行数据竞争检测器，也没有验证多个并发 stop 或 worker 内部 stop，这些用法不属于当前支持范围。Issue #6 已完成学习总结与本地验收，待提交、推送和 GitHub 归档。
+本阶段最近一次核验为 2026-09-22：构建输出 `ninja: no work to do.`，CTest 为 `3/3 Passed`。三个测试程序包含上述多个测试函数。测试通过不代表覆盖所有并发调度；尚未运行数据竞争检测器，也没有验证多个并发 stop 或 worker 内部 stop，这些用法不属于当前支持范围。Issue #6 已完成学习总结、验收及 GitHub 归档。
 
 ## Benchmark（Issue #7 完成后填写）
 
