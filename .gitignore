@@ -4,6 +4,7 @@
 /cmake-build-*/
 /build-ninja/
 /task_queue_test.exe
+/build-release/
 
 # IDE settings
 .vscode/

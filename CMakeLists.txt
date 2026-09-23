@@ -56,3 +56,9 @@ add_test(
     NAME thread_pool_test
     COMMAND thread_pool_test
 )
+
+# Benchmark
+add_executable(thread_pool_benchmark
+    benchmarks/thread_pool_benchmark.cpp
+)
+target_link_libraries(thread_pool_benchmark PRIVATE thread_pool)

@@ -16,7 +16,7 @@
 | [Issue #4](https://github.com/Zhihui-Cui/cpp-thread-pool/issues/4) | 阻塞等待与唤醒 | 已实现并测试，Issue 已关闭 |
 | [Issue #5](https://github.com/Zhihui-Cui/cpp-thread-pool/issues/5) | submit 与 future | 已实现并测试，Issue 已关闭 |
 | [Issue #6](https://github.com/Zhihui-Cui/cpp-thread-pool/issues/6) | 优雅关闭 | 已实现并测试，Issue 已关闭 |
-| [Issue #7](https://github.com/Zhihui-Cui/cpp-thread-pool/issues/7) | 测试、benchmark 与项目说明 | 待完成 |
+| [Issue #7](https://github.com/Zhihui-Cui/cpp-thread-pool/issues/7) | 测试、benchmark 与项目说明 | benchmark 已实现并运行，构建与测试通过；文档待本人查阅，复盘与归档进行中 |
 
 每个阶段完成验收和收尾后，再推进下一阶段。个人理解与踩坑记录写在 [设计与学习记录](docs/design-notes.md)。
 
@@ -35,7 +35,7 @@ tests/
     single_thread_executor_test.cpp 单线程执行器测试
     thread_pool_test.cpp            线程基础、生命周期、返回值、异常与参数传递测试
 benchmarks/
-    thread_pool_benchmark.cpp       后续性能测试，当前为空文件
+    thread_pool_benchmark.cpp       比较 1/2/4 个 worker，校验结果并输出五轮耗时及中位数
 docs/
     design-notes.md                 各阶段设计、学习总结与验收记录
 CMakeLists.txt                      构建目标、依赖和测试注册
@@ -153,13 +153,33 @@ int main() {
 
 目前 CTest 注册了三个测试程序。一个程序中的多个测试函数不会分别计入 CTest 的测试数量。已检查同步实现并运行上述测试；尚未使用数据竞争检测器，也未模拟构造中途创建线程失败。详细证据与限制见设计笔记。
 
+Issue #7 本人提供的验证输出为 3/3 Passed，总耗时 0.51 秒。2026-09-23 对包含 `bound_task` 重命名的代码再次执行 `cmake --build build-ninja` 和 `ctest --test-dir build-ninja --output-on-failure --timeout 30`，构建成功，3/3 Passed，总耗时 1.17 秒；已确认该目录为 Debug 配置。
+
 Issue #4 的完成标记测试在每轮提交后使用带谓词的 `wait_for()` 等待，并在线程池析构前断言结果；不能据此保证提交时 worker 已进入阻塞，也未测量空闲 CPU 使用率或主动制造虚假唤醒。
 
 Issue #5 的正式接口测试直接调用 `pool.submit()` 并通过 future 检查结果。测试没有固定 worker 与提交返回的先后顺序，也没有证明每次 `get()` 都实际阻塞过。具体断言、运行记录和未覆盖范围见设计笔记。
 
-## 线程池架构（Issue #3～#6 完成后填写）
+## 线程池架构
 
-> 待填写：任务从提交到完成的流程，以及队列、worker、等待状态之间的关系。
+任务从提交到结果获取的流程如下：
+
+```text
+提交线程：submit(函数, 参数)
+              ↓ 保存函数与参数，包装为 packaged_task，取得 future
+           enqueue(捕获 shared_ptr 的可复制任务)
+              ↓ 锁内检查停止状态并入队，解锁后 notify_one
+共享队列：std::function<void()>
+              ↓ worker 在状态锁内等待条件成立并取出任务
+工作线程：解锁 → 执行任务 → packaged_task 保存返回值或异常
+                                      ↓
+调用线程：future.get() ← 等待并读取共享状态中的结果或异常
+```
+
+带参数的 `submit()` 先用 lambda 和 tuple 保存函数与参数，再交给无参数重载包装。队列中的外层任务捕获 `shared_ptr`，使不可复制的 `packaged_task` 可以通过可复制的 lambda 放入 `std::function<void()>`，并保持存活到执行时。
+
+worker 由构造函数创建，循环消费共享队列。`state_mutex_` 协调停止状态、入队与等待条件检查，队列内部互斥量保护队列操作。条件变量在“已请求停止或队列非空”时允许 worker 继续；等待期间释放状态锁，醒来后重新持锁检查。用户任务在锁外执行，因此多个 worker 可以并行计算。任务完成顺序不保证与提交顺序一致。
+
+`stop()` 在状态锁内设置停止标志，解锁后唤醒所有 worker，再 join。worker 继续执行已接受任务，直到停止且取不到任务才退出。future 负责结果交付，join 负责线程回收，两者用途不同。
 
 ## 返回值与异常
 
@@ -253,13 +273,58 @@ ctest --test-dir build-ninja --output-on-failure --timeout 30
 
 本阶段最近一次核验为 2026-09-22：构建输出 `ninja: no work to do.`，CTest 为 `3/3 Passed`。三个测试程序包含上述多个测试函数。测试通过不代表覆盖所有并发调度；尚未运行数据竞争检测器，也没有验证多个并发 stop 或 worker 内部 stop，这些用法不属于当前支持范围。Issue #6 已完成学习总结、验收及 GitHub 归档。
 
-## Benchmark（Issue #7 完成后填写）
+## Benchmark
 
-> 待填写：运行命令、硬件与编译配置、任务负载、测量方法、至少两种 worker 数量的结果，以及对结果的解释。
+### 测量环境与负载
+
+- 系统：Windows，使用 PowerShell。
+- CPU：12th Gen Intel Core i5-1240P，12 核心、16 逻辑处理器。
+- 编译器：MSYS2 UCRT64 GCC 16.2.0（Rev3, Built by MSYS2 project）。
+- 构建：CMake + Ninja，C++17，Release。
+- 负载：1000 个独立任务，每个任务执行 100000 轮无符号整数乘加运算；任务初始值为 1～1000。
+- worker 数量：1、2、4。
+
+### 构建与运行
+
+在项目根目录依次执行，工具路径需按实际安装位置调整：
+
+```powershell
+cmake -S . -B build-release -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=C:/msys64/ucrt64/bin/g++.exe -DCMAKE_MAKE_PROGRAM=C:/msys64/ucrt64/bin/ninja.exe
+cmake --build build-release --target thread_pool_benchmark
+.\build-release\thread_pool_benchmark.exe
+```
+
+benchmark 是独立可执行程序，不注册到 CTest。功能测试继续使用 Debug，保证 `assert` 生效；benchmark 的结果校验使用 `if`，在 Release 中仍然执行。`build-release/` 已加入 Git 忽略规则。
+
+### 测量方法
+
+每种 worker 配置先预热一次，再正式测量五次，将耗时排序并取中位数。每次调用 `run_benchmark()` 都创建新的线程池；预热执行同类负载，不复用上一轮 worker。配置按 1、2、4 的固定顺序运行。
+
+使用 `std::chrono::steady_clock`，从提交第一个任务之前计时，到所有 future 的 `get()` 返回并完成结果汇总后结束。包含任务提交、调度、执行和结果收集；不包含线程池创建、future 容器预留空间、线程池关闭及输出。提交和执行可以重叠。
+
+计时之外先串行计算 `expected_checksum`，预热和每轮正式测量都核对实际 `checksum`。结果不一致时向 `std::cerr` 输出错误，并以非零退出码结束。求和可能碰撞，且基准使用相同计算函数，因此这只是基本结果校验，不能替代任务恰好执行一次等功能测试，也不能独立验证计算函数的算法。
+
+### 本次结果
+
+以下记录来自本人在本阶段提供的运行输出，未经文档编辑时重新测量：
+
+| worker 数量 | 五次耗时范围（ms） | 中位数（ms） | 相对单 worker 加速比 |
+| --- | --- | --- | --- |
+| 1 | 113.710～118.277 | 116.156 | 1.00 |
+| 2 | 60.052～66.277 | 61.059 | 1.90 |
+| 4 | 33.690～35.004 | 34.943 | 3.32 |
+
+15 次正式测量的 checksum 均为 `11208273736162531860`。原始五轮耗时保存在 [设计笔记](docs/design-notes.md)。
+
+2026-09-23 重新构建 Release 并复验，1/2/4 worker 的中位数分别为 150.176、67.853、52.239 ms，checksum 仍全部一致。本次波动更大，单独记录在设计笔记，不与上表合并统计；不同运行的耗时会变化，当前数据不足以归因或认定性能回退。
+
+在此次环境和负载下，增加 worker 缩短了耗时，但没有达到线性加速。任务提交、同步、调度及硬件资源等因素可能影响性能，本次没有分别测量这些因素的开销，也不能仅凭某轮耗时偏高确定原因。
+
+加速比以单 worker 线程池为基准，没有测量直接串行执行的耗时。结果仅代表这一种计算负载；固定测量顺序、后台负载、频率与温度变化均可能影响结果。尚未比较更多 worker 数量、不同任务粒度或 I/O 负载，不能据此确定最佳 worker 数量。
 
 ## 设计权衡与限制（逐阶段填写）
 
-- 队列继续保存 `std::function<void()>`。外层 lambda 按值捕获管理包装任务的 `shared_ptr`，可被复制，且能延长包装任务的寿命；内部用户任务可以是不可复制、可移动的对象。代价包括共享所有权管理和包装对象的存储开销，尚未测量性能。
+- 队列继续保存 `std::function<void()>`。外层 lambda 按值捕获管理包装任务的 `shared_ptr`，可被复制，且能延长包装任务的寿命；内部用户任务可以是不可复制、可移动的对象。代价包括共享所有权管理和包装对象的存储开销；当前 benchmark 测量整批任务耗时，尚未单独测量这些开销。
 - 当前参数传递是按值保存，再从保存的 tuple 中调用，不是完整的通用调用接口。已测试捕获 `unique_ptr` 的不可复制任务；这不等于支持将 `unique_ptr` 作为任务参数按值转交给计算函数，因为当前调用不会从 tuple 元素再次移动所有权。
 - 尚未覆盖引用返回值、成员指针调用或所有引用包装与参数类型组合，不应据现有测试推断全面支持。当前已验证用法见上方示例和测试文件。
 - 关闭采用等待全部已接受任务完成的方式，不提供强制取消或重新启动；不支持并发 stop 或 worker 内部 stop。具体使用约定与验证范围见上方关闭语义，更多学习记录见 [设计笔记](docs/design-notes.md)。

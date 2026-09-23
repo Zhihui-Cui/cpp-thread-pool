@@ -40,13 +40,13 @@ public:
     auto submit(F function, Arg argument, Args... args)
         -> std::future<decltype(function(argument, args...))> {
 
-        auto lambda = [saved_function = std::move(function),
-                       saved_arguments =
-                           std::make_tuple(std::move(argument), std::move(args)...)]() mutable {
+        auto bound_task = [saved_function = std::move(function),
+                           saved_arguments =
+                               std::make_tuple(std::move(argument), std::move(args)...)]() mutable {
             return std::apply(saved_function, saved_arguments);
         };
 
-        auto result = this->submit(std::move(lambda));
+        auto result = this->submit(std::move(bound_task));
 
         return result;
     }
