@@ -16,7 +16,7 @@
 | [Issue #4](https://github.com/Zhihui-Cui/cpp-thread-pool/issues/4) | 阻塞等待与唤醒 | 已实现并测试，Issue 已关闭 |
 | [Issue #5](https://github.com/Zhihui-Cui/cpp-thread-pool/issues/5) | submit 与 future | 已实现并测试，Issue 已关闭 |
 | [Issue #6](https://github.com/Zhihui-Cui/cpp-thread-pool/issues/6) | 优雅关闭 | 已实现并测试，Issue 已关闭 |
-| [Issue #7](https://github.com/Zhihui-Cui/cpp-thread-pool/issues/7) | 测试、benchmark 与项目说明 | benchmark 已实现并运行，构建与测试通过；文档待本人查阅，复盘与归档进行中 |
+| [Issue #7](https://github.com/Zhihui-Cui/cpp-thread-pool/issues/7) | 测试、benchmark 与项目说明 | 构建、测试、benchmark、文档与复盘已完成，Issue 已关闭 |
 
 每个阶段完成验收和收尾后，再推进下一阶段。个人理解与踩坑记录写在 [设计与学习记录](docs/design-notes.md)。
 
