@@ -2,7 +2,7 @@
 
 ## 当前状态
 
-本人已完成初稿并进行多轮修改，之后由助手补齐实现、整理测试及构建配置。2026-09-29 本人又完成 worker_loop()、stop() 的独立重写，以及逐任务验证析构完成的新测试，经代码检查、运行与复述后通过任务 2 本轮验收。这不代表整份实现从头到尾均无协助完成；间隔后的变体复做仍待进行。
+本人已完成初稿并进行多轮修改，之后由助手补齐实现、整理测试及构建配置。2026-09-29 本人又完成 worker_loop()、stop() 的独立重写，以及逐任务验证析构完成的新测试，经代码检查、运行与复述后通过任务 2 本轮验收。这不代表整份实现从头到尾均无协助完成；按最新范围，间隔后的变体复做为可选巩固，不作为关闭 Issue #8 的前置。
 
 练习文件：`practice/minimal_thread_pool.cpp`。复用已有 `ThreadSafeQueue`，任务类型仅为 `std::function<void()>`，不加入模板 submit 或 future。
 
@@ -98,4 +98,4 @@ ctest --test-dir build-ninja -R '^minimal_thread_pool_test$' --output-on-failure
 - 独立新增 test_destruction_executes_each_task_once()：4 个 worker、100 个值捕获的编号、互斥保护更新、池析构后逐项断言。首次漏 main 调用，随后补齐，运行通过。
 - 独立重写 worker_loop() 和 stop()，检查等待条件、出队与退出判断位于状态锁内，执行和 join 位于锁外。构建无警告，CTest 中 minimal_thread_pool_test 1/1 通过。
 
-后续返回值、共享所有权和异常传递练习见 [任务 3 记录](issue-8-task-3.md)。当前最小池程序包含十个测试函数，早期七个测试及 4/4 的结果保留为当时记录。
+后续返回值、共享所有权和异常传递练习见 [任务 3 记录](issue-8-task-3.md)。补齐 void 路径后，当前最小池程序包含十一个测试函数，早期七个测试及 4/4 的结果保留为当时记录。

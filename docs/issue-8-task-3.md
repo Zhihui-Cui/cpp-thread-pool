@@ -2,7 +2,7 @@
 
 ## 范围与结果
 
-2026-09-29 完成独立 packaged_task/future 小练习，以及将返回值和异常接入最小线程池的本轮验收。最小池保持 submit(std::function<void()>) 接口，没有添加模板 submit，也没有重新实现正式线程池。
+2026-09-29 完成 packaged_task/future 的 int 返回值和异常练习，并将这两条路径接入最小线程池。复核发现此前遗漏 packaged_task<void()> / future<void> 练习，现已补齐并运行通过；本轮返回值、void、异常与异常后继续执行均已验收。最小池保持 submit(std::function<void()>) 接口，没有添加模板 submit，也没有重新实现正式线程池。
 
 本阶段包含提示与示例代码：智能指针包装的第一份测试由助手给出示例，本人随后完成修改；异常后继续执行的测试由本人编写并通过检查。不能记录为全程无协助独立完成。
 
@@ -48,9 +48,10 @@ std::thread 可以保存移动进来的 packaged_task，而当前池的 std::fun
 
 - 任务 1：时序、生命周期与等待条件经纠正和复述后通过概念验收。
 - 任务 2：协助修订后，本人重写核心循环与关闭逻辑，新增逐任务析构测试，通过本轮验收。
-- 任务 3：返回值、异常传递及异常后继续执行通过代码与复述验收。
-- Issue #8 保留间隔变体复做待办，计划在 2026-10-02 至 2026-10-06 进行有界队列满时拒绝练习；未标记整个 Issue 完成。
-- Issue #9 已明确 Linux 构建、多生产者、提交与单个 stop 并发、调试及可用时数据竞争检测要求，目前只进入环境准备阶段。
+- 任务 3：int 返回值、void、异常传递及异常后继续执行均已通过验收。新增 test_pool_executes_void_packaged_task() 使用 packaged_task<void()> 修改外部变量，future<void>.get() 返回后检查变量，且已在 main 调用。
+- Issue #8：当前必做测试与证据已补齐，完整构建运行通过；上传后可勾选“返回值、void 和异常”并关闭。按 2026-09-29 最新范围，有界队列或排队耗时变体改为可选延迟复测，不必等变体完成才关闭。
+- Issue #9：只要求在 Linux 构建现有项目、启用断言且设置超时运行功能测试、用调试器定位一次简单故障或卡点，并记录工具链、命令、结果及独立完成/需提示部分。需能解释配置、编译、链接与运行的区别。
+- 多生产者、submit 与单个 stop 并发、数据竞争检测均转为后续可选巩固，不阻塞 Issue #9，不新增并发 stop 支持，不继续扩张线程池功能。
 
 ## 归档前完整验证
 
@@ -62,6 +63,26 @@ cmake --build build-ninja
 ctest --test-dir build-ninja --output-on-failure --timeout 30
 ```
 
-构建成功且未输出警告，CTest 5/5 通过，总耗时 0.98 秒。包括原有三个测试程序与两个 practice 测试程序。正式线程池测试中已有的 future 等待练习也已改为描述性名称并接入 main。
+构建成功且未输出警告，CTest 5/5 通过，总耗时 0.98 秒。包括原有三个测试程序与两个 practice 测试程序。正式线程池测试中已有的 future 等待练习也已改为描述性名称并接入 main。这是补 void 练习之前的历史结果，不能作为新增 void 测试已通过的证据。
 
 本次没有进行 Linux 构建、数据竞争检测或线程创建失败注入，不作为 Issue #9 完成证据。
+
+## void 路径补测与最终验收（2026-09-29）
+
+本人编写 test_pool_executes_void_packaged_task()：外部 value 先于池创建；shared_ptr 管理 packaged_task<void()>，提交的 lambda 按值捕获智能指针；主线程通过 future<void>.get() 等待后断言 value == 42，不依靠 stop 或析构代替 get 等待。
+
+首次测试因任务写入 40、断言期望 42 而失败。本人确认修改后，助手发现磁盘仍是 40，按已确认要求修正为 42。保留此记录，不将错误修正归为全程独立完成。
+
+最终验证命令：
+
+```powershell
+cmake -S . -B build-ninja -DCMAKE_BUILD_TYPE=Debug
+cmake --build build-ninja
+ctest --test-dir build-ninja --output-on-failure --timeout 30
+```
+
+构建成功，无警告；CTest 5/5 通过，总耗时 0.92 秒。minimal_thread_pool_test 现含十一个测试函数，packaged_task_test 含两个。Debug 保留断言，两个练习目标另外设置 -UNDEBUG（MSVC 为 /UNDEBUG）和 15 秒超时；整体测试命令设置 30 秒超时。
+
+get() 等待共享状态就绪并取得结果或重新抛出异常，future<void> 无返回值但同样提供完成同步；join() 等待线程执行结束并回收线程。两者职责不同。该 void 测试只有一个 worker 任务写 value，主线程在 get() 成功返回后读取，无需额外互斥锁。
+
+此结果覆盖本轮 Windows 验收，不代表 Linux、调试器或数据竞争检测已完成。Issue #9 仍按 Linux 构建、测试与一次调试的最新范围推进。

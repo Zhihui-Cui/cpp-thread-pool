@@ -307,6 +307,25 @@ void test_pool_propagates_packaged_task_exception() {
     assert(value == 42);
 }
 
+void test_pool_executes_void_packaged_task() {
+    int value = 0;
+    MinimalThreadPool pool(1);
+
+    auto task = std::make_shared<std::packaged_task<void()>>([&value] {
+        value = 42;
+    });
+
+    std::future<void> result = task->get_future();
+
+    pool.submit([task] {
+        (*task)();
+    });
+
+    result.get();
+
+    assert(value == 42);
+}
+
 int main() {
     test_rejects_zero_workers();
     test_stop_completes_each_task_once();
@@ -318,5 +337,6 @@ int main() {
     test_destruction_executes_each_task_once();
     test_pool_executes_packaged_task();
     test_pool_propagates_packaged_task_exception();
+    test_pool_executes_void_packaged_task();
     return 0;
 }
