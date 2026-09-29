@@ -17,8 +17,12 @@
 | [Issue #5](https://github.com/Zhihui-Cui/cpp-thread-pool/issues/5) | submit 与 future | 已实现并测试，Issue 已关闭 |
 | [Issue #6](https://github.com/Zhihui-Cui/cpp-thread-pool/issues/6) | 优雅关闭 | 已实现并测试，Issue 已关闭 |
 | [Issue #7](https://github.com/Zhihui-Cui/cpp-thread-pool/issues/7) | 测试、benchmark 与项目说明 | 构建、测试、benchmark、文档与复盘已完成，Issue 已关闭 |
+| [Issue #8](https://github.com/Zhihui-Cui/cpp-thread-pool/issues/8) | 核心机制独立验收 | 任务 1—3 本轮验收完成，包含协助修订、核心函数独立重写和复述；间隔变体复做待完成 |
+| [Issue #9](https://github.com/Zhihui-Cui/cpp-thread-pool/issues/9) | Linux 验证与多生产者并发测试 | 已明确需求，正在准备 Linux 环境；尚未完成 Linux 构建或并发验收 |
 
-每个阶段完成验收和收尾后，再推进下一阶段。个人理解与踩坑记录写在 [设计与学习记录](docs/design-notes.md)。
+个人理解与踩坑记录写在 [设计与学习记录](docs/design-notes.md)。Issue #8 的间隔复做保留待办，等待期间可推进 Issue #9 的环境准备。
+
+核心机制练习记录：[任务 1：时序与所有权](docs/issue-8-task-1.md)、[任务 2：最小池](docs/issue-8-task-2.md)、[任务 3：返回值与异常](docs/issue-8-task-3.md)。
 
 ## 项目结构
 
@@ -36,6 +40,9 @@ tests/
     thread_pool_test.cpp            线程基础、生命周期、返回值、异常与参数传递测试
 benchmarks/
     thread_pool_benchmark.cpp       比较 1/2/4 个 worker，校验结果并输出五轮耗时及中位数
+practice/
+    minimal_thread_pool.cpp         最小池重写、析构验收及 packaged_task 接入测试
+    packaged_task_test.cpp          独立线程中的返回值与异常传递练习
 docs/
     design-notes.md                 各阶段设计、学习总结与验收记录
 CMakeLists.txt                      构建目标、依赖和测试注册
@@ -151,7 +158,9 @@ int main() {
 | `single_thread_executor_test` | 提交时不执行、按顺序执行、完成的任务不重复执行 |
 | `thread_pool_test` | 线程基础、共享队列消费、1/2/4 个 worker 各正确执行 1,000 个任务、拒绝零 worker、空任务析构、三轮析构前完成标记；future 获取 int/double/void 结果、任务异常及异常后继续执行、值捕获、单个及多个参数、mutable 任务、不可复制任务；保留 packaged_task 与 tuple/apply 的基础练习 |
 
-目前 CTest 注册了三个测试程序。一个程序中的多个测试函数不会分别计入 CTest 的测试数量。已检查同步实现并运行上述测试；尚未使用数据竞争检测器，也未模拟构造中途创建线程失败。详细证据与限制见设计笔记。
+两个独立练习也已注册为测试：`minimal_thread_pool_test` 包含最小池生命周期、逐任务计数、任务内再次提交、返回值与异常后继续执行等十个测试函数；`packaged_task_test` 包含独立线程中的返回值和异常传递两个测试函数。
+
+目前 CTest 注册了五个测试程序。一个程序中的多个测试函数不会分别计入 CTest 的测试数量。两个 practice 测试目标显式取消 NDEBUG，保留断言，并各设置 15 秒超时；整个项目仍推荐用 Debug 和 `ctest --test-dir build-ninja --output-on-failure --timeout 30` 验证。尚未使用数据竞争检测器，也未模拟构造中途创建线程失败。历史阶段的 3/3、4/4 结果保留原始语境。
 
 Issue #7 本人提供的验证输出为 3/3 Passed，总耗时 0.51 秒。2026-09-23 对包含 `bound_task` 重命名的代码再次执行 `cmake --build build-ninja` 和 `ctest --test-dir build-ninja --output-on-failure --timeout 30`，构建成功，3/3 Passed，总耗时 1.17 秒；已确认该目录为 Debug 配置。
 

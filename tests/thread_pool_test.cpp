@@ -97,8 +97,8 @@ void test_thread_pool_executes_each_task_once(std::size_t worker_count) {
         }
     }
 
-    for (int i = 0; i < 1000; ++i) {
-        assert(hits[i] == 1);
+    for (int hit : hits) {
+        assert(hit == 1);
     }
 }
 
@@ -561,6 +561,30 @@ void test_stop_drains_pending_tasks() {
     assert(valueC == 3);
 }
 
+void test_futures_wait_for_all_submitted_tasks() {
+    int count = 0;
+    std::mutex count_mutex;
+    learning::ThreadPool pool(2);
+
+    std::vector<std::future<void>> results;
+    results.reserve(100);
+
+    for (int i = 0; i < 100; ++i) {
+        results.push_back(pool.submit([&count, &count_mutex] {
+            std::lock_guard<std::mutex> lock(count_mutex);
+            ++count;
+        }));
+    }
+
+    for (auto& res : results) {
+        res.get();
+    }
+
+    assert(count == 100);
+
+    pool.stop();
+}
+
 int main() {
     test_thread_updates_value();
     test_multiple_workers_update_count();
@@ -594,5 +618,6 @@ int main() {
     test_stop_completes_submitted_tasks();
     test_repeated_pool_shutdown();
     test_stop_drains_pending_tasks();
+    test_futures_wait_for_all_submitted_tasks();
     return 0;
 }

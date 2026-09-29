@@ -57,6 +57,30 @@ add_test(
     COMMAND thread_pool_test
 )
 
+# Independent learning exercise; keep assertions enabled in every configuration.
+add_executable(minimal_thread_pool_test
+    practice/minimal_thread_pool.cpp
+)
+target_include_directories(minimal_thread_pool_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_link_libraries(minimal_thread_pool_test PRIVATE Threads::Threads)
+target_compile_options(minimal_thread_pool_test PRIVATE
+    $<$<CXX_COMPILER_ID:MSVC>:/W4 /permissive- /UNDEBUG>
+    $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall -Wextra -Wpedantic -UNDEBUG>
+)
+add_test(NAME minimal_thread_pool_test COMMAND minimal_thread_pool_test)
+set_tests_properties(minimal_thread_pool_test PROPERTIES TIMEOUT 15)
+
+add_executable(packaged_task_test
+    practice/packaged_task_test.cpp
+)
+target_link_libraries(packaged_task_test PRIVATE Threads::Threads)
+target_compile_options(packaged_task_test PRIVATE
+    $<$<CXX_COMPILER_ID:MSVC>:/W4 /permissive- /UNDEBUG>
+    $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall -Wextra -Wpedantic -UNDEBUG>
+)
+add_test(NAME packaged_task_test COMMAND packaged_task_test)
+set_tests_properties(packaged_task_test PROPERTIES TIMEOUT 15)
+
 # Benchmark
 add_executable(thread_pool_benchmark
     benchmarks/thread_pool_benchmark.cpp

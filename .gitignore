@@ -5,6 +5,7 @@
 /build-ninja/
 /task_queue_test.exe
 /build-release/
+/practice/*.exe
 
 # IDE settings
 .vscode/
