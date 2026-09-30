@@ -305,6 +305,29 @@ ctest --test-dir build-ninja --output-on-failure --timeout 30
 
 ## Benchmark
 
+### Linux 串行基线与任务粒度实验（2026-09-30）
+
+当前 benchmark 增加直接串行计时，与 1/2/4 worker 使用相同任务、各预热一次并正式测量五次。当前 `iterations = 1000`；改为 `100000` 并重新构建可测重任务，`task_count` 均为 1000。
+
+```bash
+cmake -S . -B out/linux-release -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake --build out/linux-release --target thread_pool_benchmark -j 2
+./out/linux-release/thread_pool_benchmark
+```
+
+下表为各批中位数，单位毫秒；Linux Release、GCC 13.3.0。加速比以同批次直接串行为基准。
+
+| 批次 | 串行 | 1 worker | 2 workers | 4 workers |
+| --- | --- | --- | --- | --- |
+| 100000 轮/任务，首次 | 93.263 | 109.464 | 59.668 | 29.754 |
+| 1000 轮/任务，首次 | 1.122 | 3.211 | 1.290 | 14.144 |
+| 1000 轮/任务，复测 1 | 1.271 | 3.111 | 1.139 | 13.007 |
+| 1000 轮/任务，复测 2 | 1.095 | 3.280 | 1.113 | 11.724 |
+
+各组 checksum 校验一致。重任务首次 4 workers 相对串行加速约 3.13×；轻任务中 2 workers 接近串行、收益不稳定，4 workers 三批中位数均明显偏高且波动大，根因未定位。完整五轮数据、计时范围和解释边界见 [Linux 性能实验记录](docs/benchmark-linux-granularity.md)。
+
+以下保留 2026-09-23 Windows benchmark 的历史记录；当时没有直接串行计时，任务粒度固定为 100000 轮，不能与本轮 Linux 数据直接混合比较。
+
 ### 测量环境与负载
 
 - 系统：Windows，使用 PowerShell。
