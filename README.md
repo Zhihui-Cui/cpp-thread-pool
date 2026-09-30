@@ -18,11 +18,13 @@
 | [Issue #6](https://github.com/Zhihui-Cui/cpp-thread-pool/issues/6) | 优雅关闭 | 已实现并测试，Issue 已关闭 |
 | [Issue #7](https://github.com/Zhihui-Cui/cpp-thread-pool/issues/7) | 测试、benchmark 与项目说明 | 构建、测试、benchmark、文档与复盘已完成，Issue 已关闭 |
 | [Issue #8](https://github.com/Zhihui-Cui/cpp-thread-pool/issues/8) | 核心机制独立验收收尾 | 当前必做已验收：核心机制、返回值、void、异常及异常后继续执行；Debug 5/5 通过；变体复做可选 |
-| [Issue #9](https://github.com/Zhihui-Cui/cpp-thread-pool/issues/9) | Linux 构建与一次调试 | 当前必做为 Linux 构建、启用断言且有超时的功能测试、一次调试及学习记录；尚未完成 |
+| [Issue #9](https://github.com/Zhihui-Cui/cpp-thread-pool/issues/9) | Linux 构建与一次调试 | 当前必做已验收：Linux Debug 测试 5/5 通过，按提示完成 GDB 定位、修复与复测；记录及概念复述已完成，术语纠正已记入 |
 
 个人理解与踩坑记录写在 [设计与学习记录](docs/design-notes.md)。按 2026-09-29 最新范围，有界队列等变体复做、多生产者测试、submit 与 stop 并发测试和数据竞争检测均为后续可选巩固，不作为当前 Issue #8、#9 的关闭前置。
 
 核心机制练习记录：[任务 1：时序与所有权](docs/issue-8-task-1.md)、[任务 2：最小池](docs/issue-8-task-2.md)、[任务 3：返回值与异常](docs/issue-8-task-3.md)。
+
+Linux 实践记录：[Issue #9：构建、测试与一次 GDB 调试](docs/issue-9-linux-debug.md)。
 
 ## 项目结构
 
@@ -86,6 +88,25 @@ cmake -S . -B build-ninja
 ```
 
 `ctest` 运行已编译的程序，不负责重新编译。修改代码后先确认构建成功，再运行测试。当前测试使用 `assert`；定义 `NDEBUG` 的构建会禁用这些断言。
+
+### Linux（WSL Ubuntu 24.04）构建与测试
+
+已验证环境：GCC 13.3.0、CMake 3.28.3、Ninja、GDB 15.1。在 Ubuntu 中安装工具：
+
+```bash
+sudo apt update
+sudo apt install -y build-essential cmake ninja-build git gdb
+```
+
+在 Linux 终端的项目根目录执行，使用独立目录保存 Linux 构建产物：
+
+```bash
+cmake -S . -B out/linux-debug -G Ninja -DCMAKE_BUILD_TYPE=Debug
+cmake --build out/linux-debug -j 2
+ctest --test-dir out/linux-debug --output-on-failure --timeout 30
+```
+
+2026-09-30 修复调试练习中的人工错误后，CTest 5/5 通过，总耗时 0.80 秒。Debug 保留断言和调试信息；两个练习测试另设 15 秒超时，其余使用命令中的 30 秒超时。调试过程、证据来源及学习边界见 [Issue #9 记录](docs/issue-9-linux-debug.md)。
 
 ## 当前功能与用法
 
