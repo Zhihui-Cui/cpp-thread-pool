@@ -20,7 +20,9 @@
 | [Issue #8](https://github.com/Zhihui-Cui/cpp-thread-pool/issues/8) | 核心机制独立验收收尾 | 当前必做已验收：核心机制、返回值、void、异常及异常后继续执行；Debug 5/5 通过；变体复做可选 |
 | [Issue #9](https://github.com/Zhihui-Cui/cpp-thread-pool/issues/9) | Linux 构建与一次调试 | 当前必做已验收：Linux Debug 测试 5/5 通过，按提示完成 GDB 定位、修复与复测；记录及概念复述已完成，术语纠正已记入 |
 
-个人理解与踩坑记录写在 [设计与学习记录](docs/design-notes.md)。按 2026-09-29 最新范围，有界队列等变体复做、多生产者测试、submit 与 stop 并发测试和数据竞争检测均为后续可选巩固，不作为当前 Issue #8、#9 的关闭前置。
+个人理解与踩坑记录写在 [设计与学习记录](docs/design-notes.md)。Issue #8、#9 按当时范围验收；按 2026-10-01 整合路线，随后完成有界队列变体练习，Linux Debug 全部 6 个测试程序通过。下一步进入 P1：约 6—10 小时的本地 TCP 请求路径练习。
+
+有界队列练习：[实现、确定性测试与 GDB 学习记录](docs/bounded-thread-pool.md)。本次包含提示、代码审查与局部修正，不等同于完整独立验收；重复的参数检查练习按本人决定跳过。
 
 核心机制练习记录：[任务 1：时序与所有权](docs/issue-8-task-1.md)、[任务 2：最小池](docs/issue-8-task-2.md)、[任务 3：返回值与异常](docs/issue-8-task-3.md)。
 
@@ -45,6 +47,7 @@ benchmarks/
 practice/
     minimal_thread_pool.cpp         最小池重写、析构验收及 packaged_task 接入测试
     packaged_task_test.cpp          独立线程中的返回值与异常传递练习
+    bounded_thread_pool.cpp         有界队列、满时拒绝与确定性时序测试
 docs/
     design-notes.md                 各阶段设计、学习总结与验收记录
 CMakeLists.txt                      构建目标、依赖和测试注册

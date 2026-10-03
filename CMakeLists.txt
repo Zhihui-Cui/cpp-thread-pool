@@ -81,6 +81,17 @@ target_compile_options(packaged_task_test PRIVATE
 add_test(NAME packaged_task_test COMMAND packaged_task_test)
 set_tests_properties(packaged_task_test PROPERTIES TIMEOUT 15)
 
+add_executable(bounded_thread_pool_test
+    practice/bounded_thread_pool.cpp
+)
+target_link_libraries(bounded_thread_pool_test PRIVATE Threads::Threads)
+target_compile_options(bounded_thread_pool_test PRIVATE
+    $<$<CXX_COMPILER_ID:MSVC>:/W4 /permissive- /UNDEBUG>
+    $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall -Wextra -Wpedantic -UNDEBUG>
+)
+add_test(NAME bounded_thread_pool_test COMMAND bounded_thread_pool_test)
+set_tests_properties(bounded_thread_pool_test PROPERTIES TIMEOUT 15)
+
 # Benchmark
 add_executable(thread_pool_benchmark
     benchmarks/thread_pool_benchmark.cpp
