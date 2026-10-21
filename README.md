@@ -20,7 +20,7 @@
 | [Issue #8](https://github.com/Zhihui-Cui/cpp-thread-pool/issues/8) | 核心机制独立验收收尾 | 当前必做已验收：核心机制、返回值、void、异常及异常后继续执行；Debug 5/5 通过；变体复做可选 |
 | [Issue #9](https://github.com/Zhihui-Cui/cpp-thread-pool/issues/9) | Linux 构建与一次调试 | 当前必做已验收：Linux Debug 测试 5/5 通过，按提示完成 GDB 定位、修复与复测；记录及概念复述已完成，术语纠正已记入 |
 
-个人理解与踩坑记录写在 [设计与学习记录](docs/design-notes.md)。Issue #8、#9 按当时范围验收；按 2026-10-01 整合路线，随后完成有界队列变体练习，Linux Debug 全部 6 个测试程序通过。下一步进入 P1：约 6—10 小时的本地 TCP 请求路径练习。
+个人理解与踩坑记录写在 [设计与学习记录](docs/design-notes.md)。Issue #8、#9 按当时范围验收；按 2026-10-01 整合路线，随后完成有界队列变体练习，Linux Debug 全部 6 个测试程序通过。P1 已有单请求 TCP 实现；截至 10/21，模型主线已推进到标准化与二分类。本仓库冻结功能扩展，按需巩固，见 [最新学习状态](docs/progress-2026-10-21.md)。
 
 有界队列练习：[实现、确定性测试与 GDB 学习记录](docs/bounded-thread-pool.md)。本次包含提示、代码审查与局部修正，不等同于完整独立验收；重复的参数检查练习按本人决定跳过。
 
