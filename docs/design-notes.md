@@ -442,4 +442,4 @@
 
 ### 总控仓库复盘位置
 
-已于 2026-09-23 写入并随 `81ec176` 提交、推送至总控仓库：[ThreadPool 阶段复盘](https://github.com/Zhihui-Cui/ai-infra-roadmap/blob/main/weekly-reviews/2026-09-23-thread-pool.md)。内容按该仓库的周复盘模板整理，记录本阶段交付、卡点、能力自评和后续方向；建议的下一阶段练习标为待本人确定。该文件记录的是当时尚未提交和关闭 Issue 的阶段快照，最终归档状态以本节记录为准。
+已于 2026-09-23 写入并随 `81ec176` 提交、推送至总控仓库：[ThreadPool 阶段复盘](https://github.com/Zhihui-Cui/ai-infra-roadmap/blob/main/weekly-reviews/2026-09-23-W03-checkpoint.md)。内容按该仓库的周复盘模板整理，记录本阶段交付、卡点、能力自评和后续方向；建议的下一阶段练习标为待本人确定。该文件记录的是当时尚未提交和关闭 Issue 的阶段快照，最终归档状态以本节记录为准。

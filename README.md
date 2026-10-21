@@ -20,7 +20,7 @@
 | [Issue #8](https://github.com/Zhihui-Cui/cpp-thread-pool/issues/8) | 核心机制独立验收收尾 | 当前必做已验收：核心机制、返回值、void、异常及异常后继续执行；Debug 5/5 通过；变体复做可选 |
 | [Issue #9](https://github.com/Zhihui-Cui/cpp-thread-pool/issues/9) | Linux 构建与一次调试 | 当前必做已验收：Linux Debug 测试 5/5 通过，按提示完成 GDB 定位、修复与复测；记录及概念复述已完成，术语纠正已记入 |
 
-个人理解与踩坑记录写在 [设计与学习记录](docs/design-notes.md)。Issue #8、#9 按当时范围验收；按 2026-10-01 整合路线，随后完成有界队列变体练习，Linux Debug 全部 6 个测试程序通过。P1 已有单请求 TCP 实现；截至 10/21，模型主线已推进到标准化与二分类。本仓库冻结功能扩展，按需巩固，见 [最新学习状态](docs/progress-2026-10-21.md)。
+个人理解与踩坑记录写在 [设计与学习记录](docs/design-notes.md)。Issue #8、#9 按当时范围验收；按 2026-10-01 整合路线，随后完成有界队列变体练习，Linux Debug 全部 6 个测试程序通过。P1 已有单请求 TCP 实现；截至 10/21，模型主线已推进到标准化与二分类。本仓库冻结功能扩展，按需巩固，见 [最新学习状态](docs/2026-10-21-W07-checkpoint.md)。
 
 有界队列练习：[实现、确定性测试与 GDB 学习记录](docs/bounded-thread-pool.md)。本次包含提示、代码审查与局部修正，不等同于完整独立验收；重复的参数检查练习按本人决定跳过。
 
@@ -396,3 +396,8 @@ benchmark 是独立可执行程序，不注册到 CTest。功能测试继续使�
 7. 在 Issue 中记录提交编号与验收结果，勾选验收项并关闭。
 
 构建产物和后续阶段的空白文件不作为当前阶段的功能成果提交。
+
+## 学习记录规范
+
+[W07 阶段记录：线程池验收状态](docs/2026-10-21-W07-checkpoint.md) · [统一命名与记录规范](https://github.com/Zhihui-Cui/ai-infra-roadmap/blob/main/docs/documentation-conventions.md)。
+按日期的进度记录统一为 `YYYY-MM-DD-WNN-checkpoint.md`；持续维护的设计、环境和验证说明保留主题文件名。
